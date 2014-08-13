@@ -1,0 +1,370 @@
+Unit Sockets;
+
+(* Virtual Pascal TCPIP Sockets Library v1.10
+ * Copyright 1996 Antony T Curtis
+ *)
+
+(*
+ * Constants and structures defined by the internet system,
+ * Per RFC 790, September 1981.
+ *)
+
+
+{$AlignRec-}{$PureInt+}
+interface
+Uses Os2Def,Use32;
+
+type
+  TSocket		=Integer;
+  UShort		=Os2Def.UShort;
+
+Const
+  Max_Alias		=4;
+  PZERO 		=0;
+  BSD			=43;
+
+  MAXHOSTNAMELEN	=120;
+  MAXPATHLEN		=80;
+  MAXSocketS		=2048;
+
+  SIGALRM		= 0;
+
+  SOMAXCONN		= 5;		(* Maximum queue length specifiable by listen. *)
+
+
+Const
+(*
+ * Protocols
+ *)
+  IPPROTO_IP			= 0;		   (* dummy for IP *)
+  IPPROTO_ICMP			= 1;		   (* control message protocol *)
+  IPPROTO_GGP			= 3;		   (* gateway^2 (deprecated) *)
+  IPPROTO_TCP			= 6;		   (* tcp *)
+  IPPROTO_EGP			= 8;		   (* exterior gateway protocol *)
+  IPPROTO_PUP			= 12;		   (* pup *)
+  IPPROTO_UDP			= 17;		   (* user datagram protocol *)
+  IPPROTO_IDP			= 22;		   (* xns idp *)
+
+  IPPROTO_RAW			= 255;		   (* raw IP packet *)
+  IPPROTO_MAX			= 256;
+
+
+(*
+ * Ports < IPPORT_RESERVED are reserved for
+ * privileged processes (e.g. root).
+ * Ports > IPPORT_USERRESERVED are reserved
+ * for servers, not necessarily privileged.
+ *)
+  IPPORT_RESERVED		= 1024;
+  IPPORT_USERRESERVED		= 5000;
+
+(*
+ * Link numbers
+ *)
+  IMPLINK_IP			= 155;
+  IMPLINK_LOWEXPER		= 156;
+  IMPLINK_HIGHEXPER		= 158;
+
+(*
+ * Definitions of bits in internet address integers.
+ * On subnets, the decomposition of addresses to host and net parts
+ * is done according to subnet mask, not the masks here.
+ *)
+  IN_CLASSA_NET 		= $ff000000;
+  IN_CLASSA_NSHIFT		= 24;
+  IN_CLASSA_HOST		= $00ffffff;
+  IN_CLASSA_MAX 		= 128;
+
+  IN_CLASSB_NET 		= $ffff0000;
+  IN_CLASSB_NSHIFT		= 16;
+  IN_CLASSB_HOST		= $0000ffff;
+  IN_CLASSB_MAX 		= 65536;
+
+  IN_CLASSC_NET 		= $ffffff00;
+  IN_CLASSC_NSHIFT		= 8;
+  IN_CLASSC_HOST		= $000000ff;
+
+  INADDR_ANY			= $00000000;
+  INADDR_BROADCAST		= $ffffffff;	   (* must be masked *)
+  INADDR_NONE			= $ffffffff;		(* -1 return *)
+
+  IN_LOOPBACKNET		= 127;			(* official! *)
+
+(*
+ * Internet address (a structure for historical reasons)
+ *)
+Type
+  Tin_Addr			=record
+    s_addr			:ULong;
+  end;
+
+(*
+ * Socket address, internet style.
+ *)
+  TSockAddr_in			=record
+    sin_family			:UShort;
+    sin_port			:UShort;
+    sin_addr			:Tin_Addr;
+    sin_zero			:array[0..7] of byte;
+  end;
+
+(*
+ * Structure used for manipulating linger option.
+ *)
+  Tlinger		=record
+    l_onoff		:Integer;
+    l_linger		:Integer;
+  end;
+
+(*
+ * Options for use with getsockopt at the IP level.
+ *)
+Const
+  IP_OPTIONS			= 1;		   (* set/get IP per-packet options *)
+
+(*
+ * Definitions related to Sockets: types, address families, options.
+ *)
+
+(*
+ * Types
+ *)
+Const
+  SOCK_STREAM		= 1;		   (* stream Socket *)
+  SOCK_DGRAM		= 2;		   (* datagram Socket *)
+  SOCK_RAW		= 3;		   (* raw-protocol interface *)
+  SOCK_RDM		= 4;		   (* reliably-delivered message *)
+  SOCK_SEQPACKET	= 5;		   (* sequenced packet stream *)
+
+(*
+ * Option flags per-Socket.
+ *)
+  SO_DEBUG		= $0001;	   (* turn on debugging info recording *)
+  SO_ACCEPTCONN 	= $0002;	   (* Socket has had listen() *)
+  SO_REUSEADDR		= $0004;	   (* allow local address reuse *)
+  SO_KEEPALIVE		= $0008;	   (* keep connections alive *)
+  SO_DONTROUTE		= $0010;	   (* just use interface addresses *)
+  SO_BROADCAST		= $0020;	   (* permit sending of broadcast msgs *)
+  SO_USELOOPBACK	= $0040;	   (* bypass hardware when possible *)
+  SO_LINGER		= $0080;	   (* linger on close if data present *)
+  SO_OOBINLINE		= $0100;	   (* leave received OOB data in line *)
+
+(*
+ * Additional options, not kept in so_options.
+ *)
+  SO_SNDBUF		= $1001;	   (* send buffer size *)
+  SO_RCVBUF		= $1002;	   (* receive buffer size *)
+  SO_SNDLOWAT		= $1003;	   (* send low-water mark *)
+  SO_RCVLOWAT		= $1004;	   (* receive low-water mark *)
+  SO_SNDTIMEO		= $1005;	   (* send timeout *)
+  SO_RCVTIMEO		= $1006;	   (* receive timeout *)
+  SO_ERROR		= $1007;	   (* get error status and clear *)
+  SO_TYPE		= $1008;	   (* get Socket type *)
+
+(*
+ * Level number for (get/set)sockopt() to apply to Socket itself.
+ *)
+   SOL_Socket		= $ffff;	   (* options for Socket level *)
+
+(*
+ * Address families.
+ *)
+   AF_UNSPEC		= 0;		   (* unspecified *)
+   AF_UNIX		= 1;		   (* local to host (pipes, portals) *)
+   AF_INET		= 2;		   (* internetwork: UDP, TCP, etc. *)
+   AF_IMPLINK		= 3;		   (* arpanet imp addresses *)
+   AF_PUP		= 4;		   (* pup protocols: e.g. BSP *)
+   AF_CHAOS		= 5;		   (* mit CHAOS protocols *)
+   AF_NS		= 6;		   (* XEROX NS protocols *)
+   AF_NBS		= 7;		   (* nbs protocols *)
+   AF_ECMA		= 8;		   (* european computer manufacturers *)
+   AF_DATAKIT		= 9;		   (* datakit protocols *)
+   AF_CCITT		= 10;		   (* CCITT protocols, X.25 etc *)
+   AF_SNA		= 11;		   (* IBM SNA *)
+   AF_DECnet		= 12;		   (* DECnet *)
+   AF_DLI		= 13;		   (* Direct data link interface *)
+   AF_LAT		= 14;		   (* LAT *)
+   AF_HYLINK		= 15;		   (* NSC Hyperchannel *)
+   AF_APPLETALK 	= 16;		   (* Apple Talk *)
+
+   AF_OS2		= AF_UNIX;
+
+   AF_NB		= 17;		   (* Netbios *)
+   AF_NETBIOS		= AF_NB;
+
+   AF_MAX		= 18;
+(*
+ * Protocol families, same as address families for now.
+ *)
+   PF_UNSPEC		= AF_UNSPEC;
+   PF_UNIX		= AF_UNIX;
+   PF_INET		= AF_INET;
+   PF_IMPLINK		= AF_IMPLINK;
+   PF_PUP		= AF_PUP;
+   PF_CHAOS		= AF_CHAOS;
+   PF_NS		= AF_NS;
+   PF_NBS		= AF_NBS;
+   PF_ECMA		= AF_ECMA;
+   PF_DATAKIT		= AF_DATAKIT;
+   PF_CCITT		= AF_CCITT;
+   PF_SNA		= AF_SNA;
+   PF_DECnet		= AF_DECnet;
+   PF_DLI		= AF_DLI;
+   PF_LAT		= AF_LAT;
+   PF_HYLINK		= AF_HYLINK;
+   PF_APPLETALK 	= AF_APPLETALK;
+   PF_NETBIOS		= AF_NB;
+   PF_NB		= AF_NB;
+   PF_OS2		= PF_UNIX;
+   PF_MAX		= AF_MAX;
+
+
+  FREAD 		= 1;
+  FWRITE		= 2;
+
+  MSG_OOB		= $1;		   (* process out-of-band data *)
+  MSG_PEEK		= $2;		   (* peek at incoming message *)
+  MSG_DONTROUTE 	= $4;		   (* send without using routing tables *)
+  MSG_FULLREAD		= $8;		   (* send without using routing tables *)
+
+  MSG_MAXIOVLEN 	= 16;
+
+(*
+ * Structure used by kernel to store most
+ * addresses.
+ *)
+Type
+  TSockAddr		=record
+    sa_family		:UShort;
+    sa_data		:Array[0..13] of Byte;
+  end;
+(*
+ * Structure used by kernel to pass protocol
+ * information in raw Sockets.
+ *)
+  TSockProto		=record
+    sp_family		:UShort;
+    sp_protocol 	:UShort;
+  end;
+
+  TioVec		=record
+    iov_base		:PChar;
+    iov_len		:Integer;
+  end;
+
+(*
+ * Message header for recvmsg and sendmsg calls.
+ *)
+  TMsgHdr		=record
+    msg_name		:PChar;
+    msg_namelen 	:Integer;
+    msg_iov		:^TioVec;
+    msg_iovlen		:Integer;
+    msg_accrights	:PChar;
+    msg_accrightslen	:Integer;
+  end;
+
+  Tuio			=record
+    uio_iov		:^TioVec;
+    uio_iovcnt		:Integer;
+    uio_offset		:Longint;
+    uio_segflg		:Integer;
+    uio_resid		:Integer;
+  end;
+
+  Tuio_rw		=(UIO_READ, UIO_WRITE);
+
+  THostStr		=String[MAXHOSTNAMELEN];
+  THostAlias		=Array[0..Max_Alias-1] of THostStr;
+
+  THostEnt		=record
+    h_name		:THostStr;		(* official name of host *)
+    h_aliases		:THostAlias;		(* alias list *)
+    h_addrtype		:Integer;		(* host address type *)
+    h_length		:Integer;		(* length of address *)
+    h_addr_list 	:Array[0..3]of Tin_Addr;(* list of addresses from name server *)
+  end;
+
+  TNetEnt		=record
+    n_name		:THostStr;		(* official name of net *)
+    n_aliases		:THostAlias;		(* alias list *)
+    n_addrtype		:Integer;		(* net address type *)
+    n_net		:ULong; 		(* network # *)
+  end;
+
+  TServEnt		=record
+    s_name		:THostStr;		(* official service name *)
+    s_aliases		:THostAlias;		(* alias list *)
+    s_port		:Integer;		(* port # *)
+    s_proto		:THostStr;		(* protocol to use *)
+  end;
+
+  TProtoEnt		=record
+    p_name		:THostStr;		(* official protocol name *)
+    p_aliases		:THostAlias;		(* alias list *)
+    p_proto		:Integer;		(* protocol # *)
+  end;
+
+  PFD_Set		=^TFD_Set;
+  TFD_Set		=Array[0..255] of Byte;
+
+Procedure FD_Zero(var fd:TFD_Set);inline;
+begin FillChar(fd,sizeof(fd),0); end;
+Procedure FD_Set(Sock:TSocket;var fd:TFD_Set);inline;
+begin fd[Sock div 8]:=fd[Sock div 8] or (1 shl (Sock mod 8)); end;
+Function FD_IsSet(Sock:TSocket;var fd:TFD_Set):Boolean;inline;
+begin FD_IsSet:=(fd[Sock div 8] and (1 shl (Sock mod 8)))<>0; end;
+
+threadvar
+  SockErrorProc 	:PChar;
+  SockError		:Integer;
+
+procedure Sock_Init;
+function  Sock_New(domain,typ,protocol:Integer):TSocket;
+function  Sock_Accept(Sock:TSocket;var address:TSockAddr):TSocket;
+procedure Sock_Connect(Sock:TSocket;var address:TSockAddr);
+procedure Sock_Close(Sock:TSocket);
+procedure Sock_Bind(Sock:TSocket;var address:TSockAddr);
+function  Sock_Listen(Sock:TSocket;backlog:Integer):Boolean;
+procedure Sock_Read(Sock:TSocket;var buf;size:Integer;var result:Integer);
+procedure Sock_Write(Sock:TSocket;var buf;size:Integer;var result:Integer);
+function  Sock_GetHostID:ULong;
+Function  Sock_Error:Boolean;
+function  Sock_ErrorID:Integer;
+procedure PSock_Error(st:PChar);
+procedure Sock_Select(num:Integer;rd,wr,ex:PFD_Set;timeout:Longint);
+
+function  inet_addr(addr:String):ULong;
+function  inet_ntoa(var addr:Tin_Addr):String;
+
+Function  GetHostByName(var res:THostEnt;host:String):Boolean;
+Function  GetHostByAddr(var res:THostEnt;var address:Tin_addr;protocol:Integer):Boolean;
+Function  GetServiceByName(var res:TServEnt;Service,Protocol:String):Boolean;
+Function  GetServiceByPort(var res:TServEnt;Port:UShort;Protocol:String):Boolean;
+Function  GetNetByName(var res:TNetEnt;Net:String):Boolean;
+Function  GetNetByAddr(var res:TNetEnt;address:ULong):Boolean;
+Function  GetProtocolByName(var res:TProtoEnt;Protocol:String):Boolean;
+Function  GetProtocolByNumber(var res:TProtoEnt;protocol:Integer):Boolean;
+
+Function  lswap(l:ULong):ULong;
+Function  bswap(w:UShort):UShort;
+function  Sock_Okay(Sock:TSocket):Boolean;
+Function  htonl(var l:ULong):ULong; inline;	 begin htonl:=lswap(l); end;
+Function  ntohl(var l:ULong):ULong; inline;	 begin ntohl:=lswap(l); end;
+Function  htons(var w:UShort):UShort; inline;	 begin htons:=bswap(w); end;
+Function  ntohs(var w:UShort):UShort; inline;	 begin ntohs:=bswap(w); end;
+
+procedure Sock_SetAddr(var address:TSockAddr;fam,port:UShort;ip:ULong); inline;
+begin
+  with TSockAddr_in(address) do begin
+    sin_family:=fam;
+    sin_port:=port;
+    sin_addr.s_addr:=ip;
+  end;
+end;
+
+{Function sosetsockopt(Socket,level,optVar:Integer;var optVal;rc:Integer):Integer;}
+
+implementation
+begin
+end.
